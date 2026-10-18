@@ -1,0 +1,36 @@
+name: Windows-RDP
+
+on: 
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - name: Download and Extract ngrok
+      run: |
+        Invoke-WebRequest https://equinox.io -OutFile ngrok.zip
+        Expand-Archive ngrok.zip
+    - name: Authenticate ngrok
+      run: .\ngrok\ngrok.exe authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+    - name: Enable RDP Access
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+    - name: Create Tunnel & Output Credentials
+      run: |
+        echo "=== RDP DETAILS ==="
+        Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp 3389"
+        Start-Sleep -Seconds 10
+        Invoke-RestMethod http://localhost:4040/api/tunnels | Select-Object -ExpandProperty tunnels | Select-Object -ExpandProperty public_url
+        echo "Username: runneradmin"
+        echo "Password: Use the default runner password or check the repository settings."
+        echo "==================="
+    - name: Maintain Active Session
+      run: |
+        $seconds = 21600
+        while ($seconds -gt 0) {
+          Start-Sleep -Seconds 60
+          $seconds -= 60
+        }
